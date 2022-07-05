@@ -1,3 +1,4 @@
+#!/usr/bin/python
 """
 export.py - functions for exporting texts to various text formats.
 
@@ -129,7 +130,61 @@ def make_text(doc, strip_html=False):
 
 
     return text
+    
+#new method
+def make_text_to_dar(doc, strip_html=False):
+    """
+    Export doc into a simple text format.
 
+    if complex, go through nodes depth first,
+    at each node, output name of node
+    if node is leaf, run flatten on it
+
+    """
+    # We have a strange beast here - a merged content tree.  Loading it into a synthetic version.
+    chapter = doc.get("original_text", doc["text"])
+    version = Version({"chapter": chapter})
+
+    index = library.get_index(doc["title"])
+    versionSource = doc["versionSource"] or ""
+    text = "\n".join([doc["title"], doc.get("heTitle", ""), doc["versionTitle"], versionSource])
+
+    if "versions" in doc:
+        if not len(doc["versions"]):
+            return None # Occurs when text versions don't actually have content
+        text += "\nThis file contains merged sections from the following text versions:"
+        for v in doc["versions"]:
+            text += "\n-%s\n-%s" % (v[0], v[1])
+
+    def make_node(node, depth, **kwargs):
+        if not node.children:
+            content = "\n\n%s\n\n" % node.primary_title(doc["language"])
+            cnode = version.content_node(node)
+            if strip_html:
+                cnode = version.remove_html_make_part_dar(cnode)
+            content += flatten(cnode, node.sectionNames, node.addressTypes)
+            return content
+        else:
+            return "\n\n%s" % node.primary_title(doc["language"])
+
+    def flatten(text, sectionNames, addressTypes):
+        text = text or ""
+        if len(addressTypes) == 1:
+            text = [t if t else "" for t in text]
+            # Bandaid for mismatch between text structure, join recursively if text
+            # elements are lists instead of strings.
+            return "\n".join([t if isinstance(t, str) else "\n".join(t) for t in text])
+        flat = ""
+        for i in range(len(text)):
+            section = section_to_daf(i + 1) if addressTypes[0] == "Talmud" else str(i + 1)
+            flat += "\n\n%s %s\n\n%s" % (sectionNames[0], section, flatten(text[i], sectionNames[1:], addressTypes[1:]))
+
+        return flat
+
+    text += index.nodes.traverse_to_string(make_node)
+
+
+    return text
 
 def make_cltk_full(doc):
     index = library.get_index(doc["title"])
@@ -257,6 +312,7 @@ The function takes a document and returns the text to output.
 export_formats = (
     ('json', make_json),
     ('txt', make_text),
+    ('dar',make_text_to_dar),
     ('cltk-full',make_cltk_full,'json'), #cltk format with fully nested structure
     ('cltk-flat',make_cltk_flat,'json')  #cltk format, flattened
 )
