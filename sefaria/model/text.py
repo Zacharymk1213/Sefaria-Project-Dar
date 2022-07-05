@@ -38,6 +38,8 @@ from sefaria.datatype.jagged_array import JaggedTextArray, JaggedArray
 from sefaria.settings import DISABLE_INDEX_SAVE, USE_VARNISH, MULTISERVER_ENABLED, RAW_REF_MODEL_BY_LANG_FILEPATH, RAW_REF_PART_MODEL_BY_LANG_FILEPATH
 from sefaria.system.multiserver.coordinator import server_coordinator
 
+#For Dar <a> handling
+from html.parser import HTMLParser
 """
                 ----------------------------------
                          Index, IndexSet
@@ -1195,7 +1197,95 @@ class AbstractTextRecord(object):
         else:
             return False
         return t
+    @staticmethod
+    def remove_html_make_part_dar(t):
+        class MyHTMLParser(HTMLParser):
+           def handle_starttag(self, tag, attrs):
+                #make global just so it applies out of this sub-class and can be accessed
+                global tag_global
+                global attrs_global
+                attrs_global = attrs
+                tag_global = tag        				
+           def handle_data(self, data):
+                global data_global
+                global len_data
+                data_global = data
+                len_data = len(data_global)   
+        if isinstance(t, list):
+            for i, v in enumerate(t):
+                if isinstance(v, str):
+                    t[i] = re.sub(r'<i>', "/", v)
+                    t[i] = re.sub(r'</i>', "/", v)
+                    t[i] = re.sub(r'<b>', "*", v)
+                    t[i] = re.sub(r'</b>', "*", v)
+                    t[i] = re.sub(r'<u>', "_", v)
+                    t[i] = re.sub(r'</u>', "_", v)
+                    t[i] = re.sub(r'<br>', "\n", v)
+                    t[i] = re.sub(r'<strong>', "*", v)
+                    t[i] = re.sub(r'</strong>', "*", v)
+                    t[i] = re.sub(r'<em>', "/", v)
+                    t[i] = re.sub(r'</em>', "/", v)
+                    t[i] = re.sub(r'<big>', " ", v)
+                    t[i] = re.sub(r'</big>', " ", v)
+                    t[i] = re.sub(r'<sup>', " ", v)
+                    t[i] = re.sub(r'</sup>', " ", v)
+                    t[i] = re.sub(r'<sub>', " ", v)
+                    t[i] = re.sub(r'</sub>', " ", v)
+                    t[i] = re.sub(r'<span>', " ", v)
+                    t[i] = re.sub(r'</span>', " ", v)                   
+                    t[i] = re.sub(r'<small>', " ", v)
+                    t[i] = re.sub(r'</small>', " ", v)
+                    #do this so I can add the > to end the string
+                    if ("<img src" in v):
+                    	t[i] = re.sub(r'<img src', "+[]<", v)
+                    	t[i] += ">"
+                    #This is something of a hacky solution but the easiest way I could find. 
+                    #It does assume the <a> tag has two attributes href and a site as well as data
+             
+                    if ("a href" in v):
+                    	#make html parser class and use it to extract all info
 
+                        parser = MyHTMLParser()
+                        parser.feed(v)
+			#attrs_global gives a bunch of junk this just rewrites it so it gives what I need
+			#this was tested for awhile with a terminal
+                        attrs_global_string = attrs_global[0]
+                        attrs_global_string = str(attrs_global_string)
+                        attrs_global_string = attrs_global_string.split(",",1)
+                        attrs_global_string_2 = str(attrs_global_string[1])
+                        attrs_global_string_2 = attrs_global_string_2.rstrip(attrs_global_string_2[-1])
+                        #replace any rogue quotations so you just have the url
+                        attrs_global_string_2 = attrs_global_string_2.replace('"',"")
+                        attrs_global = attrs_global_string_2
+                        replace_string = "[" + data_global + "]" + "<" + attrs_global + ">" 
+                        #I'm inexperienced with regular expressions so this is my best guess
+                        t[i] = re.sub('a href=.*<\/a>',replace_string , v) 
+                    t[i] = re.sub(r'<ul>', "%/\n%%/\n", v)
+                    t[i] = re.sub(r'</ul>', "/\n", v)
+                    t[i] = re.sub(r'<li>', "- /\n", v)
+                    t[i] = re.sub(r'</li>', "/\n", v) 
+                    """#iterate through all the <th> and <tr> data in v and use that to set the f-string value
+		    if ("<th>" or "<tr>" in v):
+		    data = 0
+		    	for "<th>" in v:	    
+		    		parser = MyHTMLParser()
+				parser.feed(v)
+				if len_data > data:
+					data = len_data
+		    """		   
+                    t[i] = re.sub(r'[ ]{2,}', " ", t[i])
+                    t[i] = re.sub(r'(\S) ([.?!,])', r"\1\2", t[i])  # Remove spaces preceding punctuation
+                    t[i] = t[i].strip()
+                else:
+                    t[i] = AbstractTextRecord.remove_html_make_part_dar(v)
+        elif isinstance(t, str):
+            t = re.sub(r'<[^>]+>', " ", t)
+            t = re.sub(r'[ ]{2,}', " ", t)
+            t = re.sub(r'(\S) ([.?!,])', r"\1\2", t)  # Remove spaces preceding punctuation
+            t = t.strip()
+        else:
+            return False
+        return t
     @staticmethod
     def _itag_is_footnote(tag):
         return tag.name == "sup" and isinstance(tag.next_sibling, Tag) and tag.next_sibling.name == "i" and 'footnote' in tag.next_sibling.get('class', '')
