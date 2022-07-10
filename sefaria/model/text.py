@@ -40,6 +40,7 @@ from sefaria.system.multiserver.coordinator import server_coordinator
 
 #For Dar <a> handling
 from html.parser import HTMLParser
+from re import search
 """
                 ----------------------------------
                          Index, IndexSet
@@ -1198,7 +1199,8 @@ class AbstractTextRecord(object):
             return False
         return t
     @staticmethod
-    def remove_html_make_part_dar(t):
+    def remove_html_make_part_dar(t,footnotelist=[]):
+        
         class MyHTMLParser(HTMLParser):
            def handle_starttag(self, tag, attrs):
                 #make global just so it applies out of this sub-class and can be accessed
@@ -1212,41 +1214,53 @@ class AbstractTextRecord(object):
                 data_global = data
                 len_data = len(data_global)   
         if isinstance(t, list):
+        #implement span classes
             for i, v in enumerate(t):
                 if isinstance(v, str):
-                    t[i] = re.sub(r'<i>', "/", v)
-                    t[i] = re.sub(r'</i>', "/", v)
-                    t[i] = re.sub(r'<b>', "*", v)
-                    t[i] = re.sub(r'</b>', "*", v)
-                    t[i] = re.sub(r'<u>', "_", v)
-                    t[i] = re.sub(r'</u>', "_", v)
-                    t[i] = re.sub(r'<br>', "\n", v)
-                    t[i] = re.sub(r'<strong>', "*", v)
-                    t[i] = re.sub(r'</strong>', "*", v)
-                    t[i] = re.sub(r'<em>', "/", v)
-                    t[i] = re.sub(r'</em>', "/", v)
-                    t[i] = re.sub(r'<big>', " ", v)
-                    t[i] = re.sub(r'</big>', " ", v)
-                    t[i] = re.sub(r'<sup>', " ", v)
-                    t[i] = re.sub(r'</sup>', " ", v)
-                    t[i] = re.sub(r'<sub>', " ", v)
-                    t[i] = re.sub(r'</sub>', " ", v)
-                    t[i] = re.sub(r'<span>', " ", v)
-                    t[i] = re.sub(r'</span>', " ", v)                   
-                    t[i] = re.sub(r'<small>', " ", v)
-                    t[i] = re.sub(r'</small>', " ", v)
+                    #t[i] = re.sub(r'\*\׀\*', '', t[i])
+                    t[i] = re.sub(r'\*', '', t[i])                    
+                    t[i] = re.sub(r'<i>', "/", t[i])
+                    #modify this so it doesn't mess up the </i> of the <i footnote> maybe move this to secondary script
+                    t[i] = re.sub(r'</i>', "/", t[i])
+                    t[i] = re.sub(r'<b>', '*', t[i])
+                    t[i] = re.sub(r'</b>', '*', t[i])
+                    t[i] = re.sub(r'<u>', "_", t[i])
+                    t[i] = re.sub(r'</u>', "_", t[i])
+                    t[i] = re.sub(r'<br>', "\n", t[i])
+                    t[i] = re.sub(r'<strong>', "*", t[i])
+                    t[i] = re.sub(r'</strong>', "*", t[i])
+                    t[i] = re.sub(r'<em>', "/", t[i])
+                    t[i] = re.sub(r'</em>', "/", t[i])
+                    t[i] = re.sub(r'<big>', " ", t[i])
+                    t[i] = re.sub(r'</big>', " ", t[i])
+                    t[i] = re.sub(r'<sup>', " ", t[i])
+                    t[i] = re.sub(r'</sup>', " ", t[i])
+                    t[i] = re.sub(r'<sub>', " ", t[i])
+                    t[i] = re.sub(r'</sub>', " ", t[i])
+                    t[i] = re.sub(r'<span>', " ", t[i])
+                    t[i] = re.sub(r'</span>', " ", t[i]) 
+                    t[i] = re.sub(r'<span class=.*>', " ", t[i]) 
+                    t[i] = re.sub(r'<small>', " ", t[i])
+                    t[i] = re.sub(r'</small>', " ", t[i])
+                    #revisit the i class for footnotes
+                    t[i] = re.sub(r'<i class.*>', "[^1]", t[i])
+                    #work on i classes to export
+                    if ("<i class=*" in t[i]):
+                        t[i] = re.sub(r'</i>', "\n", t[i])
+
+
                     #do this so I can add the > to end the string
-                    if ("<img src" in v):
-                    	t[i] = re.sub(r'<img src', "+[]<", v)
+                    if ("<img src" in t[i]):
+                    	t[i] = re.sub(r'<img src', "+[]<", t[i])
                     	t[i] += ">"
                     #This is something of a hacky solution but the easiest way I could find. 
                     #It does assume the <a> tag has two attributes href and a site as well as data
              
-                    if ("a href" in v):
+                    if ("a href" in t[i]):
                     	#make html parser class and use it to extract all info
 
                         parser = MyHTMLParser()
-                        parser.feed(v)
+                        parser.feed(t[i])
 			#attrs_global gives a bunch of junk this just rewrites it so it gives what I need
 			#this was tested for awhile with a terminal
                         attrs_global_string = attrs_global[0]
@@ -1259,11 +1273,21 @@ class AbstractTextRecord(object):
                         attrs_global = attrs_global_string_2
                         replace_string = "[" + data_global + "]" + "<" + attrs_global + ">" 
                         #I'm inexperienced with regular expressions so this is my best guess
-                        t[i] = re.sub('a href=.*<\/a>',replace_string , v) 
-                    t[i] = re.sub(r'<ul>', "%/\n%%/\n", v)
-                    t[i] = re.sub(r'</ul>', "/\n", v)
-                    t[i] = re.sub(r'<li>', "- /\n", v)
-                    t[i] = re.sub(r'</li>', "/\n", v) 
+                        t[i] = re.sub('a href=.*<\/a>',replace_string , t[i]) 
+                    t[i] = re.sub(r'<ul>', "%/\n%%/\n", t[i])
+                    t[i] = re.sub(r'</ul>', "/\n", t[i])
+                    t[i] = re.sub(r'<li>', "- /\n", t[i])
+                    t[i] = re.sub(r'</li>', "/\n", t[i]) 
+                    #take t[i] data and construct a list of all the values of footnotes
+                    #breakpoint()
+                    if search("[1^]", t[i]) == True:
+                    	index_stuff = t[i].index("[1^]")
+                    	second_index = t[i].index("[1^]")
+                    	footnotevalue = t[i[index_stuff:second_index]]
+                    	footnotelist.append(footnotevalue)
+
+                    t[i] = re.sub(r'<[1^].*/>', " ", t[i])          	
+                    
                     """#iterate through all the <th> and <tr> data in v and use that to set the f-string value
 		    if ("<th>" or "<tr>" in v):
 		    data = 0
@@ -1285,6 +1309,7 @@ class AbstractTextRecord(object):
             t = t.strip()
         else:
             return False
+        t += footnotelist
         return t
     @staticmethod
     def _itag_is_footnote(tag):
