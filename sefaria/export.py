@@ -1,4 +1,3 @@
-#!/bin/python3
 """
 export.py - functions for exporting texts to various text formats.
 
